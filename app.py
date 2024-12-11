@@ -24,7 +24,8 @@ filter_columns = [
 exclude_from_bar = [
     'Q1. Which of the following checklists have you used so far in your monitoring visits?',
     'Q2. From the following, select three checklists where you require follow-up training',
-    'Q6: What type of training or resources would help you perform your job better?'
+    'Q6: What type of training or resources would help you perform your job better?',
+    'Q2: Which of the following indicators are you familiar with?'
 ]
 
 wordcloud_questions = [
@@ -36,18 +37,14 @@ wordcloud_questions = [
     'Q5: Could you provide a list of additional topics (maximum 3 topics) you would like WFP to cover for TPM activity in the upcoming TPM training?'
 ]
 
-# ----------------------------------------
 # Title and Description
-# ----------------------------------------
 st.title("TPM Training Need Assessment Analysis")
 st.markdown("""
 This dashboard provides insights into training needs and preferences gathered from a TPM pre-training assessment. 
 Use the filters on the left to refine the data and explore visualizations including frequency-based bar charts and word clouds for open-ended responses.
 """)
 
-# ----------------------------------------
 # Sidebar Filters
-# ----------------------------------------
 st.sidebar.title("Filters")
 st.sidebar.markdown("Use the dropdown menus below to filter the dataset.")
 
@@ -62,9 +59,7 @@ for col, val in selected_filters.items():
     if val != "All":
         filtered_df = filtered_df[filtered_df[col] == val]
 
-# ----------------------------------------
 # Filter Summary and Data Preview
-# ----------------------------------------
 st.markdown("---")
 st.subheader("Current Filters Applied")
 for k, v in selected_filters.items():
@@ -77,23 +72,19 @@ st.subheader("Filtered Data Preview")
 st.markdown("Below is a subset of the dataset after applying the selected filters:")
 st.dataframe(filtered_df)
 
-# ----------------------------------------
 # Visualizations
-# ----------------------------------------
 st.markdown("---")
 st.subheader("Visualizations")
 
 metrics = [col for col in df.columns if col not in filter_columns]
 
 for metric in metrics:
-    # Skip columns we do not want to visualize
     if metric in exclude_from_bar:
         continue
 
-    st.markdown(f"### {metric}")
+    st.markdown(f"#### {metric}")
 
     if metric in wordcloud_questions:
-        # Word Cloud Visualization
         texts = filtered_df[metric].dropna().astype(str).tolist()
         words = []
         for t in texts:
@@ -109,10 +100,11 @@ for metric in metrics:
         else:
             st.info("No topics available to generate a word cloud.")
     else:
-        # Bar Chart Visualization
         value_counts = filtered_df[metric].value_counts().reset_index()
         category_col = "category_col"
         value_counts.columns = [category_col, 'count']
+        total_count = value_counts['count'].sum()
+        value_counts['percentage'] = (value_counts['count'] / total_count) * 100
 
         if len(value_counts) == 0:
             st.info("No data available for this metric after filtering.")
@@ -121,14 +113,22 @@ for metric in metrics:
                 alt.Chart(value_counts)
                 .mark_bar(color="#4E79A7")
                 .encode(
-                    x=alt.X(f"{category_col}:O", sort='-y', title="Responses"),
-                    y=alt.Y('count:Q', title="Count")
+                    x=alt.X(f"{category_col}:O", title=metric, axis=alt.Axis(labelAngle=0)),
+                    y=alt.Y('count:Q', title="Count"),
+                    tooltip=[
+                        alt.Tooltip(f"{category_col}:N", title="Category"),
+                        alt.Tooltip('count:Q', title="Count"),
+                        alt.Tooltip('percentage:Q', format=".1f", title="Percentage (%)")
+                    ]
                 )
-                .properties(width=600, height=400)
-                .configure_axis(
-                    labelFontSize=12,
-                    titleFontSize=14
-                )
-                .configure_title(fontSize=16)
+                .properties(width=800, height=400)
+            ) + alt.Chart(value_counts).mark_text(dy=-5).encode(
+                x=alt.X(f"{category_col}:O"),
+                y=alt.Y('count:Q'),
+                text=alt.Text('count:Q')
+            ) + alt.Chart(value_counts).mark_text(dy=-20).encode(
+                x=alt.X(f"{category_col}:O"),
+                y=alt.Y('count:Q'),
+                text=alt.Text('percentage:Q', format=".1f")
             )
             st.altair_chart(chart, use_container_width=True)
